@@ -148,11 +148,18 @@ function LoginView({ onRequestOtp, onVerify }) {
   }, [step, seconds]);
   useEffect(() => { if (step === "otp") inputsRef.current[0]?.focus(); }, [step]);
 
-  async function handleSend() {
+    async function handleSend() {
     if (phone.replace(/\D/g, "").length < 9) return;
-    await send.run(phone).catch(() => {});
-    setSeconds(30); setStep("otp");
+    try {
+      await send.run(phone);
+      setSeconds(30);
+      setStep("otp");
+    } catch {
+      // فشل الطلب (مثلاً حساب موقوف) — نفضل في شاشة إدخال الهاتف
+      // ورسالة الخطأ هتظهر تلقائيًا تحت الحقل بسبب send.error
+    }
   }
+
   function updateDigit(i, val) {
     const v = val.replace(/\D/g, "").slice(-1);
     const next = [...digits]; next[i] = v; setDigits(next);
