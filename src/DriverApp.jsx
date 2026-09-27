@@ -33,7 +33,7 @@ const mapUrl = (lat, lng, address) =>
 /* =================================================================== */
 
 export default function JomlaDriverApp() {
-  const { actor, loading, requestOtp, verifyOtp, logout } = useSession("employee");
+  const { actor, profile, loading, requestOtp, verifyOtp, logout } = useSession("employee");
   const [view, setView] = useState("orders");
   const [selectedId, setSelectedId] = useState(null);
   const [toast, setToast] = useState(null);
@@ -116,7 +116,7 @@ function DriverShell({ actor, view, setView, selectedId, setSelectedId, onLogout
         )}
         {view === "cash" && (
           <CashView
-            driverId={actor.id}
+            driverId={actor.id} canSettle={(profile?.permissions || []).includes("finance.vouchers")}
             orders={orders.data ?? []}
             cashInHand={cashInHand}
             onSettled={(total) => { refreshAll(); showToast(`تم تسليم ${money(total)} للشركة`); setView("orders"); }}
@@ -673,7 +673,7 @@ function SupportChatView() {
 
 /* --------------------------- النقدية --------------------------- */
 
-function CashView({ driverId, orders, cashInHand, onSettled }) {
+function CashView({ driverId, orders, cashInHand, canSettle, onSettled }) {
   const settle = useAction(() => api.settleDriver(driverId));
 
   const pending = orders.filter((o) => o.cod_collected && !o.cod_settled);
@@ -689,14 +689,14 @@ function CashView({ driverId, orders, cashInHand, onSettled }) {
 
       {settle.error && <p className="field-error">{settle.error}</p>}
 
-      {cashInHand > 0 ? (
+      {cashInHand > 0 && canSettle ? (
         <button className="btn-primary btn-big" disabled={settle.pending}
           onClick={() => settle.run().then((r) => onSettled(r.total)).catch(() => {})}>
           <Check size={18} style={{ verticalAlign: "-4px", marginLeft: 8 }} />
           {settle.pending ? "جارٍ التسليم…" : "تسليم المبلغ كامل للشركة"}
         </button>
       ) : (
-        <div className="done-stamp"><Check size={16} /><span>لا توجد مبالغ معلّقة — حسابك مسوّى</span></div>
+        <div className="done-stamp"><Check size={16} /><span>{cashInHand > 0 ? "بانتظار استلام المبلغ من الإدارة" : "لا توجد مبالغ معلّقة — حسابك مسوّى"}</span></div>
       )}
 
       <h2 className="subsection-heading" style={{ marginTop: 22 }}>
