@@ -575,9 +575,11 @@ function OrderDetailView({ orderId, orders, onDone }) {
                   <Check size={16} style={{ verticalAlign: "-3px", marginLeft: 6 }} />
                   نعم، سلّمت واستلمت المبلغ
                 </button>
-                <button className="btn-ghost" disabled={deliver.pending} onClick={() => confirm(false)}>
+                                {order.payment_method === "deferred" && (
+<button className="btn-ghost" disabled={deliver.pending} onClick={() => confirm(false)}>
                   سلّمت بدون تحصيل مبلغ
                 </button>
+                )}
               </>
             ) : (
               <button className="btn-primary" disabled={deliver.pending} onClick={() => confirm(false)}>
