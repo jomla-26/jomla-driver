@@ -1275,8 +1275,8 @@ function Style() {
 
       .range-bar{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
       .range-inputs{display:flex;gap:8px}
-      .range-inputs label{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-soft)}
-      .range-inputs .field-input{padding:8px 10px;font-size:13px}
+      .range-inputs label{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-soft)}
+      .range-inputs .field-input{padding:8px 10px;font-size:13px;width:100%;min-width:0;box-sizing:border-box}
       .range-chips{display:flex;flex-wrap:wrap;gap:6px}
       .range-chip{border:1px solid var(--rule);background:var(--paper-raised);color:var(--ink);border-radius:999px;
         padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
