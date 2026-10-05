@@ -464,11 +464,11 @@ function DateRangeBar({ from, to, onChange }) {
     <div className="range-bar" dir="rtl">
       <div className="range-inputs">
         <label><span>من</span>
-          <input type="date" className="field-input" value={from || ""} max={to || undefined}
+          <input type="date" lang="en-GB" dir="ltr" className="field-input" value={from || ""} max={to || undefined}
             onChange={(e) => onChange({ from: e.target.value, to })} />
         </label>
         <label><span>إلى</span>
-          <input type="date" className="field-input" value={to || ""} min={from || undefined}
+          <input type="date" lang="en-GB" dir="ltr" className="field-input" value={to || ""} min={from || undefined}
             onChange={(e) => onChange({ from, to: e.target.value })} />
         </label>
       </div>
