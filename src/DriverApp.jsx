@@ -442,15 +442,73 @@ function AccountView({ actor, onSupport, onLogout }) {
   );
 }
 
+/* ---------------------- شريط الفترة (من/إلى) ---------------------- */
+// أيام بتوقيت ليبيا (Africa/Tripoli) بصيغة YYYY-MM-DD
+function tripoliDay(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Tripoli", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
+function DateRangeBar({ from, to, onChange }) {
+  const today = tripoliDay(0);
+  const monthStart = today.slice(0, 8) + "01";
+  const chips = [
+    { key: "today", label: "اليوم", f: today, t: today },
+    { key: "week", label: "7 أيام", f: tripoliDay(-6), t: today },
+    { key: "month", label: "هذا الشهر", f: monthStart, t: today },
+    { key: "all", label: "الكل", f: "", t: "" },
+  ];
+  const activeKey = (chips.find((c) => c.f === (from || "") && c.t === (to || "")) || {}).key;
+  const invalid = from && to && from > to;
+  return (
+    <div className="range-bar" dir="rtl">
+      <div className="range-inputs">
+        <label><span>من</span>
+          <input type="date" className="field-input" value={from || ""} max={to || undefined}
+            onChange={(e) => onChange({ from: e.target.value, to })} />
+        </label>
+        <label><span>إلى</span>
+          <input type="date" className="field-input" value={to || ""} min={from || undefined}
+            onChange={(e) => onChange({ from, to: e.target.value })} />
+        </label>
+      </div>
+      <div className="range-chips">
+        {chips.map((c) => (
+          <button type="button" key={c.key} className={"range-chip" + (activeKey === c.key ? " range-chip-active" : "")}
+            onClick={() => onChange({ from: c.f, to: c.t })}>{c.label}</button>
+        ))}
+        {(from || to) && (
+          <button type="button" className="range-chip range-clear" onClick={() => onChange({ from: "", to: "" })}>
+            <X size={12} /> مسح
+          </button>
+        )}
+      </div>
+      {invalid && <p className="field-error">تاريخ البداية بعد تاريخ النهاية</p>}
+    </div>
+  );
+}
+
 /* -------------------------- الطلبيات -------------------------- */
 
 function OrdersView({ actorName, state, cashInHand, onOpen, onGoCash }) {
   const [tab, setTab] = useState("assigned");
   const { data, loading, error, reload } = state;
+  const [range, setRange] = useState({ from: "", to: "" });
+  const hasRange = Boolean(range.from || range.to);
+  const rangeBad = Boolean(range.from && range.to && range.from > range.to);
+  // تبويب "تم التسليم": عند اختيار فترة نجلب الطلبيات بـ from/to من السيرفر
+  const ranged = useFetch(
+    (signal) => api.orders({ from: range.from || undefined, to: range.to || undefined }, signal),
+    [range.from, range.to],
+    { skip: !hasRange || rangeBad }
+  );
 
   const assigned = (data ?? []).filter((o) => o.status === "assigned_to_driver");
   const active = (data ?? []).filter((o) => o.status === "out_for_delivery");
-  const done = (data ?? []).filter((o) => o.status === "delivered" || o.status === "closed");
+  const isDone = (o) => o.status === "delivered" || o.status === "closed";
+  const done = hasRange ? (ranged.data ?? []).filter(isDone) : (data ?? []).filter(isDone);
+  const doneLoading = tab === "done" && hasRange && !rangeBad && ranged.loading;
+  const doneError = tab === "done" && hasRange && !rangeBad ? ranged.error : null;
   const list = tab === "assigned" ? assigned : tab === "active" ? active : done;
 
   return (
@@ -482,13 +540,16 @@ function OrdersView({ actorName, state, cashInHand, onOpen, onGoCash }) {
         </button>
       </div>
 
-      {loading ? <Spinner />
+      {tab === "done" && <DateRangeBar from={range.from} to={range.to} onChange={setRange} />}
+
+      {loading || doneLoading ? <Spinner />
        : error ? <ErrorState message={error} onRetry={reload} />
+       : doneError ? <ErrorState message={doneError} onRetry={ranged.reload} />
        : !list.length ? (
          <Centered>
            <Package size={24} />
            <p>{tab === "assigned" ? "لا توجد طلبيات مسندة إليك حاليًا"
-              : tab === "active" ? "لا توجد طلبيات في الطريق" : "لا توجد طلبيات مسلّمة بعد"}</p>
+              : tab === "active" ? "لا توجد طلبيات في الطريق" : hasRange ? "لا توجد طلبيات مسلّمة في هذه الفترة" : "لا توجد طلبيات مسلّمة بعد"}</p>
          </Centered>
        ) : (
         <div className="order-list">
@@ -774,7 +835,15 @@ function CashView({ driverId, orders, cashInHand, cash, canSettle, onSettled, sh
   const settle = useAction(() => api.settleDriver(driverId));
 
   const pending = orders.filter((o) => o.cod_collected && !o.cod_settled);
-  const settled = orders.filter((o) => o.cod_settled);
+  const [range, setRange] = useState({ from: "", to: "" });
+  const hasRange = Boolean(range.from || range.to);
+  const rangeBad = Boolean(range.from && range.to && range.from > range.to);
+  const rangedOrders = useFetch(
+    (signal) => api.orders({ from: range.from || undefined, to: range.to || undefined }, signal),
+    [range.from, range.to],
+    { skip: !hasRange || rangeBad }
+  );
+  const settled = (hasRange ? (rangedOrders.data ?? []) : orders).filter((o) => o.cod_settled);
 
   return (
     <div className="screen">
@@ -829,8 +898,13 @@ function CashView({ driverId, orders, cashInHand, cash, canSettle, onSettled, sh
       <h2 className="subsection-heading" style={{ marginTop: 22 }}>
         مبالغ تم تسليمها سابقًا ({settled.length})
       </h2>
-      {!settled.length ? (
-        <Centered><Clock size={22} /><p>لا يوجد سجل بعد</p></Centered>
+      <DateRangeBar from={range.from} to={range.to} onChange={setRange} />
+      {hasRange && !rangeBad && rangedOrders.loading ? (
+        <Spinner />
+      ) : hasRange && !rangeBad && rangedOrders.error ? (
+        <ErrorState message={rangedOrders.error} onRetry={rangedOrders.reload} />
+      ) : !settled.length ? (
+        <Centered><Clock size={22} /><p>{hasRange ? "لا يوجد سجل في هذه الفترة" : "لا يوجد سجل بعد"}</p></Centered>
       ) : (
         <div className="cash-list">
           {settled.map((o) => (
@@ -846,6 +920,51 @@ function CashView({ driverId, orders, cashInHand, cash, canSettle, onSettled, sh
       )}
 
       <DriverWalletSection driverId={driverId} showToast={showToast} />
+      <WalletStatementSection driverId={driverId} />
+    </div>
+  );
+}
+
+/* --------------------------- كشف العهدة --------------------------- */
+
+function WalletStatementSection({ driverId }) {
+  const [range, setRange] = useState({ from: "", to: "" });
+  const bad = Boolean(range.from && range.to && range.from > range.to);
+  const tx = useFetch(
+    (signal) => api.driverWalletTransactions(driverId, { from: range.from || undefined, to: range.to || undefined }, signal),
+    [driverId, range.from, range.to],
+    { skip: bad }
+  );
+  const rows = Array.isArray(tx.data) ? tx.data : [];
+
+  return (
+    <div className="wallet-section">
+      <h2 className="subsection-heading" style={{ marginTop: 22 }}>كشف العهدة</h2>
+      <DateRangeBar from={range.from} to={range.to} onChange={setRange} />
+      {bad ? null : tx.loading ? (
+        <Spinner label="جارٍ التحميل…" />
+      ) : tx.error ? (
+        <ErrorState message={tx.error} onRetry={tx.reload} />
+      ) : !rows.length ? (
+        <Centered><Clock size={22} /><p>لا توجد حركات في هذه الفترة</p></Centered>
+      ) : (
+        <div className="stmt-list">
+          <div className="stmt-row stmt-head">
+            <span>التاريخ / البيان</span><span>وارد</span><span>صادر</span><span>الرصيد</span>
+          </div>
+          {rows.map((r, i) => (
+            <div className={"stmt-row" + (r.is_opening ? " stmt-opening" : "")} key={r.id ?? i}>
+              <div className="stmt-desc">
+                <span className="stmt-date">{String(r.entry_date || "").slice(0, 10)}</span>
+                <span className="stmt-label">{r.label}</span>
+              </div>
+              <span className="stmt-in">{Number(r.in_amount) > 0 ? money(r.in_amount) : "—"}</span>
+              <span className="stmt-out">{Number(r.out_amount) > 0 ? money(r.out_amount) : "—"}</span>
+              <b>{money(r.balance)}</b>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1153,6 +1272,26 @@ function Style() {
         border:1px solid var(--rule);border-radius:14px;padding:14px}
       .wallet-form .btn-primary{margin-top:8px}
       .wallet-form .btn-ghost{margin-top:8px}
+
+      .range-bar{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
+      .range-inputs{display:flex;gap:8px}
+      .range-inputs label{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-soft)}
+      .range-inputs .field-input{padding:8px 10px;font-size:13px}
+      .range-chips{display:flex;flex-wrap:wrap;gap:6px}
+      .range-chip{border:1px solid var(--rule);background:var(--paper-raised);color:var(--ink);border-radius:999px;
+        padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+      .range-chip-active{background:var(--orange);border-color:var(--orange);color:#fff}
+      .range-clear{color:var(--ink-soft)}
+      .stmt-list{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+      .stmt-row{display:grid;grid-template-columns:2fr 1fr 1fr 1.1fr;gap:6px;align-items:center;
+        padding:10px 4px;border-bottom:1px solid var(--rule);font-size:11.5px}
+      .stmt-head{font-weight:700;color:var(--ink-soft);font-size:11px}
+      .stmt-desc{display:flex;flex-direction:column;gap:2px}
+      .stmt-date{color:var(--ink-soft);font-size:10.5px}
+      .stmt-label{font-weight:600;font-size:12px}
+      .stmt-in{color:#1a8f4c}.stmt-out{color:#d0342c}
+      .stmt-row b{font-family:var(--font-display);font-weight:700}
+      .stmt-opening{background:var(--orange-soft)}
 
       .jomla-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);
         color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;z-index:40;max-width:88%;text-align:center}
