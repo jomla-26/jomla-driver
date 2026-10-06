@@ -77,7 +77,13 @@ export default function JomlaDriverApp() {
   useEffect(() => {
     const h = (e) => {
       const n = e.detail || {};
-      if (n.order_id) { setSelectedId(n.order_id); setView("orderDetail"); }
+      if (!n.order_id) return;
+      // لو الطلبية انسحبت من هذا المندوب ما نفتحش تفاصيلها (ما عادش له صلاحية عليها) — نرجعه للقائمة
+      api.orders().then((list) => {
+        const mine = (Array.isArray(list) ? list : list?.items || []).some((o) => o.id === n.order_id);
+        if (mine) { setSelectedId(n.order_id); setView("orderDetail"); }
+        else setView("orders");
+      }).catch(() => { setSelectedId(n.order_id); setView("orderDetail"); });
     };
     window.addEventListener("jomla-notify-nav", h);
     return () => window.removeEventListener("jomla-notify-nav", h);
