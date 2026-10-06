@@ -753,8 +753,104 @@ function OrderDetailView({ orderId, orders, onDone }) {
         <div className="done-stamp"><Check size={16} /><span>تم تسليم هذه الطلبية</span></div>
       )}
 
+      <h2 className="subsection-heading" style={{ marginTop: 20 }}>شكاوي المندوب</h2>
+      <DriverComplaintPanel orderId={order.id} />
+
       <h2 className="subsection-heading" style={{ marginTop: 20 }}>الدردشة مع العميل</h2>
       <DriverChatPanel orderId={order.id} />
+    </div>
+  );
+}
+
+/* ----------------------- شكاوي المندوب (تكت على الطلبية) ----------------------- */
+
+const COMPLAINT_KINDS = {
+  not_delivered: "الطلبية ما توصلتش للعميل",
+  customer_unreachable: "العميل ما يردش على الهاتف",
+  wrong_address: "العنوان غير صحيح أو ما نلقاهوش",
+  customer_refused: "العميل رفض الاستلام",
+  supplier_issue: "مشكلة عند المورد (تأخير أو نقص)",
+  other: "أخرى",
+};
+
+function fmtDateTime(d) {
+  const t = new Date(d);
+  if (Number.isNaN(t.getTime())) return String(d || "");
+  const p = (n) => String(n).padStart(2, "0");
+  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}`;
+}
+
+function DriverComplaintPanel({ orderId }) {
+  const { data, loading, error, reload } = useFetch(() => api.driverComplaints(orderId), [orderId]);
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState("not_delivered");
+  const [note, setNote] = useState("");
+  const [sent, setSent] = useState(false);
+  const send = useAction(() => api.openDriverComplaint(orderId, { kind, note: note.trim() || undefined }));
+
+  function submit() {
+    send.run()
+      .then(() => { setOpen(false); setNote(""); setKind("not_delivered"); setSent(true); reload(); })
+      .catch(() => {});
+  }
+
+  return (
+    <div className="info-card">
+      {loading ? <Spinner label="جارٍ التحميل…" />
+       : error ? <ErrorState message={error} onRetry={reload} />
+       : !data?.length ? <p className="info-line" style={{ margin: 0 }}>ما فيش شكاوي مسجّلة على هذه الطلبية.</p>
+       : data.map((c) => (
+          <div key={c.id} style={{ borderBottom: "1px solid var(--rule)", padding: "8px 0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <b style={{ fontSize: 13 }}>{COMPLAINT_KINDS[c.kind] || c.kind}</b>
+              <span className={"status-pill" + (c.status === "closed" ? " status-pill-done" : "")}>
+                {c.status === "closed" ? "مقفلة" : "مفتوحة"}
+              </span>
+            </div>
+            {c.note && <p className="info-line" style={{ margin: "4px 0 0" }}>{c.note}</p>}
+            {c.status === "closed" && c.admin_note && (
+              <p className="info-line" style={{ margin: "4px 0 0", color: "var(--success)" }}>رد الإدارة: {c.admin_note}</p>
+            )}
+            <span style={{ fontSize: 11, color: "var(--ink-soft)" }} dir="ltr">{fmtDateTime(c.created_at)}</span>
+          </div>
+        ))}
+
+      {sent && !open && <p className="info-line" style={{ color: "var(--success)", margin: "8px 0 0" }}>وصلت شكواك للإدارة ✅</p>}
+
+      {open ? (
+        <div style={{ marginTop: 10 }}>
+          <label className="field-label">نوع المشكلة</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+            {Object.entries(COMPLAINT_KINDS).map(([k, l]) => (
+              <button key={k} type="button" aria-pressed={kind === k}
+                onClick={() => setKind(k)}
+                style={{
+                  border: "1.5px solid " + (kind === k ? "var(--orange-deep)" : "var(--rule)"),
+                  background: kind === k ? "var(--orange)" : "var(--paper-raised)",
+                  color: kind === k ? "#fff" : "var(--ink)",
+                  borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600,
+                  fontFamily: "var(--font-body)", cursor: "pointer",
+                }}>
+                {kind === k ? "✓ " : ""}{l}
+              </button>
+            ))}
+          </div>
+          <label className="field-label">تفاصيل (اختياري{kind === "other" ? " — مطلوبة لهذا النوع" : ""})</label>
+          <textarea className="field-input" rows={3} maxLength={1000} value={note}
+            onChange={(e) => setNote(e.target.value)} placeholder="اكتب شن صار بالضبط…"
+            style={{ resize: "vertical", fontFamily: "var(--font-body)" }} />
+          {send.error && <p className="field-error">{send.error}</p>}
+          <button className="btn-primary" style={{ marginTop: 10 }}
+            disabled={send.pending || (kind === "other" && note.trim().length < 3)} onClick={submit}>
+            {send.pending ? "جارٍ الإرسال…" : "إرسال الشكوى للإدارة"}
+          </button>
+          <button className="btn-ghost" onClick={() => setOpen(false)}>إلغاء</button>
+        </div>
+      ) : (
+        <button className="btn-ghost" style={{ marginTop: 10 }} onClick={() => { setOpen(true); setSent(false); }}>
+          <AlertTriangle size={15} style={{ verticalAlign: "-3px", marginLeft: 6 }} /> فتح شكوى على هذه الطلبية
+        </button>
+      )}
     </div>
   );
 }

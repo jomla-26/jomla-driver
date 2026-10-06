@@ -280,6 +280,10 @@ vouchers: (params) => request("/finance/vouchers", { params }),
 orderMessages: (orderId, orderSupplierId) => request(`/engagement/orders/${orderId}/messages`, { params: { orderSupplierId } }),
   sendOrderMessage: (orderId, body) => request(`/engagement/orders/${orderId}/messages`, { method: "POST", body }),
 
+  /* شكاوي المندوب (تكت على الطلبية) */
+  driverComplaints: (orderId) => request(`/engagement/orders/${orderId}/driver-complaints`),
+  openDriverComplaint: (orderId, body) => request(`/engagement/orders/${orderId}/driver-complaints`, { method: "POST", body }),
+
   /* الدعم الفني (حسابي → المساعدة) — عميل/مورد/مندوب */
   supportMessages: () => request("/support/mine"),
   sendSupportMessage: (body) => request("/support/mine", { method: "POST", body: { body } }),
