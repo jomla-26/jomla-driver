@@ -1,3 +1,4 @@
+import { PasswordSteps, SetPasswordView, SecurityPanel } from "./PasswordPanels.jsx";
 import { pushState, enablePush, disablePush } from "./push.js";
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -63,7 +64,7 @@ const mapUrl = (lat, lng, address) =>
 /* =================================================================== */
 
 export default function JomlaDriverApp() {
-  const { actor, profile, loading, requestOtp, verifyOtp, logout } = useSession("employee");
+  const { actor, profile, loading, requestOtp, verifyOtp, logout, passwordLogin, codeLogin, recoverLogin, adoptSession, reloadProfile } = useSession("employee");
   const [view, setView] = useState("orders");
   const [selectedId, setSelectedId] = useState(null);
   const [toast, setToast] = useState(null);
@@ -91,7 +92,8 @@ export default function JomlaDriverApp() {
   }, []);
 
   if (loading) return <Shell><Centered><Loader2 className="spin" size={26} /><p>جارٍ التحميل…</p></Centered></Shell>;
-  if (!actor) return <Shell><LoginView onRequestOtp={requestOtp} onVerify={verifyOtp} /></Shell>;
+  if (!actor) return <Shell><LoginView onRequestOtp={requestOtp} onVerify={verifyOtp} onPasswordLogin={passwordLogin} onCodeLogin={codeLogin} onRecover={recoverLogin} onAdopt={adoptSession} /></Shell>;
+  if (profile?.needsPassword) return <Shell><SetPasswordView onSaved={reloadProfile} onLogout={logout} /></Shell>;
 
   // التطبيق مخصص لمندوبي التوصيل فقط
   if (actor.role !== "driver") {
@@ -215,8 +217,8 @@ function phoneError(raw) {
   return "";
 }
 
-function LoginView({ onRequestOtp, onVerify }) {
-  const [step, setStep] = useState("phone");
+function LoginView({ onRequestOtp, onVerify, onPasswordLogin, onCodeLogin, onRecover, onAdopt }) {
+  const [step, setStep] = useState("password");
   const [phone, setPhone] = useState("");
   const [phoneErr, setPhoneErr] = useState("");
   const lastTried = useRef("");
@@ -281,7 +283,12 @@ function LoginView({ onRequestOtp, onVerify }) {
       <LogoIntro width={250} />
       <p className="login-sub">تطبيق مندوبي التوصيل</p>
 
-      {step === "phone" ? (
+      {["password", "forgot", "code", "recover"].includes(step) ? (
+        <PasswordSteps accountType="employee" step={step} setStep={setStep} phone={phone} setPhone={setPhone}
+          phoneError={phoneError} normalizePhone={normalizeLibyanPhone} phoneLabel="رقم هاتف المندوب"
+          onPasswordLogin={onPasswordLogin} onCodeLogin={onCodeLogin} onRecover={onRecover} onAdopt={onAdopt}
+          allowRecovery={false} />
+      ) : step === "phone" ? (
         <div className="login-card">
           <label className="field-label">رقم هاتف المندوب</label>
           <input className="field-input" placeholder="09XXXXXXXX" value={phone} dir="ltr"
@@ -292,6 +299,7 @@ function LoginView({ onRequestOtp, onVerify }) {
           <button className="btn-primary" onClick={handleSend} disabled={send.pending}>
             {send.pending ? "جارٍ الإرسال…" : "إرسال رمز التحقق"}
           </button>
+          <button className="link-btn" onClick={() => setStep("password")}>عندي كلمة مرور — ادخل بها</button>
         </div>
       ) : (
         <div className="login-card">
@@ -480,6 +488,11 @@ function AccountView({ actor, onSupport, onLogout }) {
       <div className="account-row">
         <MapPin size={18} /><span>سوق الجمعة، 20 رمضان — طرابلس</span>
       </div>
+
+      <details style={{ margin: "14px 0" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px 0" }}>كلمة المرور والأمان</summary>
+        <SecurityPanel onLoggedOut={onLogout} />
+      </details>
 
       <button className="account-logout" onClick={onLogout}>
         <LogOut size={18} /><span>تسجيل الخروج</span>
